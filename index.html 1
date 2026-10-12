@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ورشتي — لوحة مسؤول المنصة</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f4;--surface:#fff;--ink:#0f1a24;--muted:#5d6b76;--line:#d5dbe0;--accent:#0d6b78;--accent-ink:#fff;--good:#1d7a46;--good-soft:#d9f0e2;--warn:#a85d00;--warn-soft:#fbe9cf;--bad:#b3261e;--bad-soft:#f8dad7;--info:#2f5fa8;--info-soft:#dce7f7;--shadow:0 1px 2px rgba(23,33,42,.08),0 4px 14px rgba(23,33,42,.06)}
+@media(prefers-color-scheme:dark){:root{--bg:#0f151b;--surface:#18222a;--ink:#e7edf1;--muted:#9aa9b4;--line:#2d3b46;--accent:#4fb6c4;--accent-ink:#06262b;--good:#58c486;--good-soft:#173525;--warn:#f0a948;--warn-soft:#3b2a10;--bad:#ff8a80;--bad-soft:#40201e;--info:#8db4f0;--info-soft:#1b2c47;--shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3)}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "IBM Plex Sans Arabic",system-ui,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-family:"Reem Kufi",sans-serif;font-size:26px;margin:0;color:var(--accent)}
+h2{font-size:18px;margin:0}
+.card{background:var(--surface);border-radius:16px;padding:14px;box-shadow:var(--shadow);margin-bottom:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.muted{color:var(--muted);font-size:13px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;cursor:pointer;font:inherit;color:inherit}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.bad{color:var(--bad);border-color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:13px}
+input,select,textarea{font:inherit;color:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);width:100%}
+.stack{display:flex;flex-direction:column;gap:10px}
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600}
+.s-active{background:var(--good-soft);color:var(--good)}
+.s-pending{background:var(--info-soft);color:var(--info)}
+.s-suspended{background:var(--bad-soft);color:var(--bad)}
+.s-expired{background:var(--warn-soft);color:var(--warn)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.ws-card{background:var(--surface);border-radius:16px;padding:14px;box-shadow:var(--shadow);border:1px solid var(--line)}
+.ws-card h3{margin:0 0 6px;font-size:16px}
+.feat{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.feat span{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--surface);border:1px solid var(--line)}
+.feat span.on{background:var(--good-soft);color:var(--good);border-color:transparent}
+.feat span.off{background:var(--surface);color:var(--muted);text-decoration:line-through}
+.msg{padding:10px 12px;border-radius:10px;font-size:13px}
+.msg.err{background:var(--bad-soft);color:var(--bad)}
+.msg.ok{background:var(--good-soft);color:var(--good)}
+.veil{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal{background:var(--surface);border-radius:16px;padding:18px;max-width:520px;width:100%;max-height:90%;overflow:auto}
+.hidden{display:none!important}
+label.row input[type=checkbox]{width:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row" style="margin-bottom:14px">
+    <h1 class="grow">لوحة مسؤول المنصة</h1>
+    <span id="whoami" class="muted"></span>
+    <button class="btn" id="logoutBtn" hidden>خروج</button>
+  </div>
+
+  <div id="loginView" class="card stack" style="max-width:420px;margin:40px auto">
+    <h2>دخول المسؤول</h2>
+    <div id="loginMsg" class="hidden"></div>
+    <div class="stack">
+      <input id="loginEmail" type="email" placeholder="البريد الإلكتروني" autocomplete="email">
+      <input id="loginPassword" type="password" placeholder="كلمة المرور" autocomplete="current-password">
+      <button class="btn pri" id="loginBtn">دخول</button>
+    </div>
+    <div class="muted">هذه اللوحة مخصصة لمسؤولي المنصة فقط.</div>
+  </div>
+
+  <div id="dashView" class="hidden">
+    <div class="card row">
+      <input id="q" class="grow" placeholder="ابحث باسم الورشة أو اسم المالك" style="max-width:340px">
+      <select id="fStatus" style="max-width:180px">
+        <option value="">كل الحالات</option>
+        <option value="active">مفعّلة</option>
+        <option value="pending">في انتظار التفعيل</option>
+        <option value="suspended">معلّقة</option>
+        <option value="expired">منتهية</option>
+      </select>
+      <button class="btn" id="reloadBtn">تحديث</button>
+      <span id="countLbl" class="muted"></span>
+    </div>
+    <div id="list" class="grid"></div>
+  </div>
+</div>
+
+<div id="modalLayer"></div>
+
+<script>
+"use strict";
+const CFG = window.WARSHATY_CONFIG || {};
+const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fdate = k => { if(!k) return "—"; const d = new Date(k); return d.toLocaleDateString("ar-EG",{day:"2-digit",month:"short",year:"numeric"}); };
+const FEATURES = [
+  {k:"reports_advanced", t:"تقارير متقدمة"},
+  {k:"inventory", t:"إدارة المخزون"},
+  {k:"team_management", t:"إدارة الفريق"},
+  {k:"branches", t:"الفروع"},
+  {k:"customer_portal", t:"بوابة العميل"}
+];
+let STATE = { workshops: [], q: "", fStatus: "" };
+
+async function callAdmin(payload){
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session) throw new Error("Not signed in");
+  const r = await fetch(`${CFG.SUPABASE_URL}/functions/v1/admin-workshops`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(j.error || "Request failed");
+  return j;
+}
+
+function showMsg(el, text, kind){
+  el.className = "msg " + kind;
+  el.textContent = text;
+  el.classList.remove("hidden");
+}
+
+function statusPill(s){
+  const map = { active:["مفعّلة","s-active"], pending:["في انتظار التفعيل","s-pending"], suspended:["معلّقة","s-suspended"], expired:["منتهية","s-expired"] };
+  const [t,c] = map[s] || [s || "—","s-pending"];
+  return `<span class="pill ${c}">${t}</span>`;
+}
+
+function filterList(){
+  const q = STATE.q.toLowerCase();
+  return STATE.workshops.filter(w => {
+    if(STATE.fStatus && w.status !== STATE.fStatus) return false;
+    if(!q) return true;
+    return (w.name||"").toLowerCase().includes(q) || (w.owner_name||"").toLowerCase().includes(q);
+  });
+}
+
+function render(){
+  const list = filterList();
+  $("#countLbl").textContent = `${list.length} / ${STATE.workshops.length}`;
+  if(!list.length){
+    $("#list").innerHTML = `<div class="muted">مفيش نتائج.</div>`;
+    return;
+  }
+  $("#list").innerHTML = list.map(w => {
+    const feats = FEATURES.map(f => {
+      const has = (w.features||[]).find(x => x.key === f.k);
+      const on = has && has.enabled;
+      return `<span class="${on?"on":"off"}">${esc(f.t)}</span>`;
+    }).join("");
+    const sub = w.subscription_end ? `ينتهي: ${fdate(w.subscription_end)}` : "بلا تاريخ انتهاء";
+    return `<div class="ws-card">
+      <div class="row" style="justify-content:space-between">
+        <h3 class="grow">${esc(w.name||"بدون اسم")}</h3>
+        ${statusPill(w.status)}
+      </div>
+      <div class="muted">المالك: ${esc(w.owner_name)} · ${w.user_count} مستخدم</div>
+      <div class="muted">أُنشئت: ${fdate(w.created_at)} · ${esc(sub)}</div>
+      ${w.suspended_reason ? `<div class="muted" style="color:var(--bad)">سبب التعليق: ${esc(w.suspended_reason)}</div>`:""}
+      <div class="feat">${feats}</div>
+      <div class="row" style="margin-top:10px">
+        ${w.status !== "active" ? `<button class="btn pri sm" data-act="activate" data-id="${w.id}">تفعيل</button>`:""}
+        ${w.status !== "suspended" ? `<button class="btn bad sm" data-act="suspend" data-id="${w.id}">تعليق</button>`:""}
+        <button class="btn sm" data-act="features" data-id="${w.id}">المميزات</button>
+        <button class="btn sm" data-act="subscription" data-id="${w.id}">الاشتراك</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function load(){
+  try{
+    const { workshops } = await callAdmin({ action: "list" });
+    STATE.workshops = workshops || [];
+    render();
+  }catch(e){
+    $("#list").innerHTML = `<div class="msg err">${esc(e.message)}</div>`;
+  }
+}
+
+function closeModal(){ $("#modalLayer").innerHTML = ""; }
+function openModal(html){
+  $("#modalLayer").innerHTML = `<div class="veil" id="veil"><div class="modal stack">${html}</div></div>`;
+  $("#veil").addEventListener("click", e => { if(e.target.id === "veil") closeModal(); });
+}
+
+function modalFeatures(w){
+  const body = FEATURES.map(f => {
+    const has = (w.features||[]).find(x => x.key === f.k);
+    const on = has && has.enabled;
+    return `<label class="row"><input type="checkbox" data-fk="${f.k}" ${on?"checked":""}> <span>${esc(f.t)}</span></label>`;
+  }).join("");
+  openModal(`<h2>مميزات: ${esc(w.name)}</h2><div class="stack">${body}</div>
+    <div class="row"><button class="btn pri" id="saveFeat">حفظ</button><button class="btn" id="closeM">إلغاء</button></div>`);
+  $("#closeM").onclick = closeModal;
+  $("#saveFeat").onclick = async () => {
+    const features = FEATURES.map(f => ({
+      key: f.k,
+      enabled: document.querySelector(`[data-fk="${f.k}"]`).checked
+    }));
+    try{
+      await callAdmin({ action: "update_features", workshop_id: w.id, features });
+      closeModal();
+      await load();
+    }catch(e){ alert(e.message); }
+  };
+}
+
+function modalSubscription(w){
+  const start = w.subscription_start ? w.subscription_start.slice(0,10) : "";
+  const end = w.subscription_end ? w.subscription_end.slice(0,10) : "";
+  openModal(`<h2>اشتراك: ${esc(w.name)}</h2>
+    <div class="stack">
+      <label>بداية الاشتراك<input type="date" id="subStart" value="${esc(start)}"></label>
+      <label>نهاية الاشتراك<input type="date" id="subEnd" value="${esc(end)}"></label>
+    </div>
+    <div class="row"><button class="btn pri" id="saveSub">حفظ</button><button class="btn" id="closeM2">إلغاء</button></div>`);
+  $("#closeM2").onclick = closeModal;
+  $("#saveSub").onclick = async () => {
+    const start = $("#subStart").value || null;
+    const end = $("#subEnd").value || null;
+    try{
+      await callAdmin({ action: "update_subscription", workshop_id: w.id, start, end });
+      closeModal();
+      await load();
+    }catch(e){ alert(e.message); }
+  };
+}
+
+function modalSuspend(w){
+  openModal(`<h2>تعليق: ${esc(w.name)}</h2>
+    <label>السبب (اختياري)<input id="susReason" placeholder="مثلاً: عدم سداد"></label>
+    <div class="row"><button class="btn bad" id="doSus">تعليق</button><button class="btn" id="closeM3">إلغاء</button></div>`);
+  $("#closeM3").onclick = closeModal;
+  $("#doSus").onclick = async () => {
+    const reason = $("#susReason").value.trim();
+    try{
+      await callAdmin({ action: "suspend", workshop_id: w.id, reason });
+      closeModal();
+      await load();
+    }catch(e){ alert(e.message); }
+  };
+}
+
+document.addEventListener("click", async e => {
+  const el = e.target.closest("[data-act]");
+  if(!el) return;
+  const { act, id } = el.dataset;
+  const w = STATE.workshops.find(x => x.id === id);
+  if(!w) return;
+  if(act === "activate"){
+    if(!confirm(`تفعيل "${w.name}"؟`)) return;
+    try{ await callAdmin({ action:"activate", workshop_id: id }); await load(); }catch(e){ alert(e.message); }
+  }
+  if(act === "suspend") modalSuspend(w);
+  if(act === "features") modalFeatures(w);
+  if(act === "subscription") modalSubscription(w);
+});
+
+$("#q").addEventListener("input", e => { STATE.q = e.target.value; render(); });
+$("#fStatus").addEventListener("change", e => { STATE.fStatus = e.target.value; render(); });
+$("#reloadBtn").addEventListener("click", load);
+
+function showLogin(){
+  $("#loginView").classList.remove("hidden");
+  $("#dashView").classList.add("hidden");
+  $("#logoutBtn").hidden = true;
+  $("#whoami").textContent = "";
+}
+async function showDash(email){
+  $("#loginView").classList.add("hidden");
+  $("#dashView").classList.remove("hidden");
+  $("#logoutBtn").hidden = false;
+  $("#whoami").textContent = email || "";
+  await load();
+}
+
+$("#loginBtn").onclick = async () => {
+  const email = $("#loginEmail").value.trim();
+  const password = $("#loginPassword").value;
+  if(!email || !password){ showMsg($("#loginMsg"), "ادخل البريد وكلمة المرور", "err"); return; }
+  $("#loginBtn").disabled = true;
+  try{
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    await callAdmin({ action: "list" });
+    showMsg($("#loginMsg"), "", "ok");
+    $("#loginMsg").classList.add("hidden");
+    await showDash(data.user.email);
+  }catch(e){
+    try{ await sb.auth.signOut(); }catch(_){}
+    showMsg($("#loginMsg"), e.message === "Not a platform admin" ? "هذا الحساب ليس مسؤول منصة" : (e.message || "تعذر الدخول"), "err");
+  }finally{
+    $("#loginBtn").disabled = false;
+  }
+};
+
+$("#logoutBtn").onclick = async () => { await sb.auth.signOut(); showLogin(); };
+
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){
+    try{ await callAdmin({ action:"list" }); await showDash(session.user.email); }
+    catch(_){ showLogin(); }
+  } else showLogin();
+})();
+</script>
+</body>
+</html>
